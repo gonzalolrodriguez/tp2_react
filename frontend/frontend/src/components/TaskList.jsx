@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useCallback, useMemo } from 'react';
 import TaskItem from './TaskItem';
 import { LayoutList, RefreshCcw } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
+import { useGlobalContext, actions } from '../context/globalContextUtils';
 
 function TaskList({ token, refresh, filter }) {
-    const [tasks, setTasks] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
+    const { state, dispatch } = useGlobalContext();
+    const [loading, setLoading] = React.useState(false);
+    const [error, setError] = React.useState('');
 
+    // Fetch tasks from API and set in global state
     const fetchTasks = async () => {
         setLoading(true);
         setError('');
@@ -17,12 +19,12 @@ function TaskList({ token, refresh, filter }) {
             });
             const data = await res.json();
             if (res.ok) {
-                if (Array.isArray(data)) setTasks(data);
-                else if (Array.isArray(data.tasks)) setTasks(data.tasks);
-                else setTasks([]);
+                let tasksArr = Array.isArray(data) ? data : (Array.isArray(data.tasks) ? data.tasks : []);
+                dispatch({ type: actions.ADD_ITEM, payload: null }); // Clear before set
+                // Set all tasks in global state (replace all)
+                dispatch({ type: 'SET_ALL', payload: tasksArr });
             } else {
                 setError(data.message || 'Error al obtener tareas');
-                setTasks([]);
             }
         } catch {
             setError('Error de red');
@@ -32,15 +34,20 @@ function TaskList({ token, refresh, filter }) {
 
     useEffect(() => {
         fetchTasks();
+        // eslint-disable-next-line
     }, [refresh, token]);
 
-    const filteredTasks = tasks.filter(task =>
-        task.title.toLowerCase().includes(filter.toLowerCase()) ||
-        task.description.toLowerCase().includes(filter.toLowerCase())
+    // Filter tasks from global state
+    const filteredTasks = useMemo(() =>
+        (state.items || []).filter(task =>
+            task.title.toLowerCase().includes(filter.toLowerCase()) ||
+            task.description.toLowerCase().includes(filter.toLowerCase())
+        ),
+        [state.items, filter]
     );
 
-    const handleUpdate = () => fetchTasks();
-    const handleDelete = () => fetchTasks();
+    const handleUpdate = useCallback(() => fetchTasks(), [fetchTasks]);
+    const handleDelete = useCallback(() => fetchTasks(), [fetchTasks]);
 
     return (
         <div className="bg-white/[0.03] backdrop-blur-[40px] shadow-2xl border border-white/10 rounded-3xl overflow-hidden flex flex-col h-full min-h-[500px]">
@@ -52,10 +59,8 @@ function TaskList({ token, refresh, filter }) {
                     <RefreshCcw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
                 </button>
             </div>
-            
             <div className="p-6 flex-1 flex flex-col">
                 {error && <div className="text-red-400 bg-red-400/10 border border-red-400/20 px-4 py-3 rounded-xl text-sm mb-4">{error}</div>}
-                
                 {filteredTasks.length === 0 && !loading && !error ? (
                     <div className="flex flex-col items-center justify-center flex-1 text-gray-500 opacity-80 mt-12 mb-12">
                         <LayoutList className="w-14 h-14 mb-4 stroke-1 hover:stroke-2 transition-all" />

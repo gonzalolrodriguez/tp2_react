@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
-import { Pen, Trash2, X, Check, Loader2 } from 'lucide-react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
+import { Pen, Trash2, X, Check, Loader2 } from 'lucide-react';
+import { useGlobalContext, actions } from '../context/globalContextUtils';
 
 function TaskItem({ task, token, onUpdate, onDelete }) {
     const [isEditing, setIsEditing] = useState(false);
     const [title, setTitle] = useState(task.title);
     const [description, setDescription] = useState(task.description);
     const [loading, setLoading] = useState(false);
+    const { dispatch } = useGlobalContext();
 
-    const handleEdit = async () => {
+    const handleEdit = useCallback(async () => {
         setLoading(true);
         try {
             const res = await fetch(`http://localhost:3000/api/tasks/${task.id}`, {
@@ -20,7 +22,9 @@ function TaskItem({ task, token, onUpdate, onDelete }) {
                 body: JSON.stringify({ title, description })
             });
             if (res.ok) {
-                onUpdate();
+                const data = await res.json();
+                dispatch({ type: actions.EDIT_ITEM, payload: data });
+                if (typeof onUpdate === 'function') onUpdate();
                 setIsEditing(false);
             }
         } catch (err) {
@@ -28,9 +32,9 @@ function TaskItem({ task, token, onUpdate, onDelete }) {
         } finally {
             setLoading(false);
         }
-    };
+    }, [task.id, title, description, token, dispatch, onUpdate]);
 
-    const handleDelete = async () => {
+    const handleDelete = useCallback(async () => {
         if (!window.confirm('¿Eliminar esta tarea?')) return;
         setLoading(true);
         try {
@@ -39,17 +43,21 @@ function TaskItem({ task, token, onUpdate, onDelete }) {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
-                onDelete();
+                dispatch({ type: actions.DELETE_ITEM, payload: task.id });
+                if (typeof onDelete === 'function') onDelete();
             }
         } catch (err) {
             console.error(err);
         } finally {
             setLoading(false);
         }
-    };
+    }, [task.id, token, dispatch, onDelete]);
+
+    const taskTitle = useMemo(() => task.title, [task.title]);
+    const taskDescription = useMemo(() => task.description, [task.description]);
 
     return (
-        <motion.li 
+        <motion.li
             layout
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -75,25 +83,25 @@ function TaskItem({ task, token, onUpdate, onDelete }) {
                 </div>
             ) : (
                 <div className="flex-1 w-full pr-4">
-                    <h4 className="font-medium text-white text-lg tracking-wide">{task.title}</h4>
-                    <p className="text-gray-400 text-sm mt-1.5 leading-relaxed font-light">{task.description}</p>
+                    <h4 className="font-medium text-white text-lg tracking-wide">{taskTitle}</h4>
+                    <p className="text-gray-400 text-sm mt-1.5 leading-relaxed font-light">{taskDescription}</p>
                 </div>
             )}
 
             <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
                 {isEditing ? (
                     <>
-                        <button 
-                            onClick={() => setIsEditing(false)} 
-                            disabled={loading} 
+                        <button
+                            onClick={() => setIsEditing(false)}
+                            disabled={loading}
                             className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white transition-colors"
                             title="Cancelar"
                         >
                             <X className="w-4 h-4" />
                         </button>
-                        <button 
-                            onClick={handleEdit} 
-                            disabled={loading} 
+                        <button
+                            onClick={handleEdit}
+                            disabled={loading}
                             className="p-2.5 rounded-xl bg-white text-black hover:bg-gray-200 transition-colors"
                             title="Guardar"
                         >
@@ -102,17 +110,17 @@ function TaskItem({ task, token, onUpdate, onDelete }) {
                     </>
                 ) : (
                     <>
-                        <button 
-                            onClick={() => setIsEditing(true)} 
-                            disabled={loading} 
+                        <button
+                            onClick={() => setIsEditing(true)}
+                            disabled={loading}
                             className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors border border-white/5"
                             title="Editar"
                         >
                             <Pen className="w-4 h-4" />
                         </button>
-                        <button 
-                            onClick={handleDelete} 
-                            disabled={loading} 
+                        <button
+                            onClick={handleDelete}
+                            disabled={loading}
                             className="p-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors border border-red-500/10 hover:border-red-500/30"
                             title="Eliminar"
                         >
@@ -125,4 +133,4 @@ function TaskItem({ task, token, onUpdate, onDelete }) {
     );
 }
 
-export default TaskItem;
+export default React.memo(TaskItem);
