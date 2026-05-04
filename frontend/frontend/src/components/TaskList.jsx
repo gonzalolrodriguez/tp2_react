@@ -4,38 +4,41 @@ import { LayoutList, RefreshCcw } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { useGlobalContext, actions } from '../context/globalContextUtils';
 
+
 function TaskList({ token, refresh, filter }) {
     const { state, dispatch } = useGlobalContext();
     const [loading, setLoading] = React.useState(false);
     const [error, setError] = React.useState('');
 
     // Fetch tasks from API and set in global state
-    const fetchTasks = async () => {
+    const fetchTasks = React.useCallback(async (signal) => {
         setLoading(true);
         setError('');
         try {
             const res = await fetch('http://localhost:3000/api/tasks', {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { 'Authorization': `Bearer ${token}` },
+                signal
             });
             const data = await res.json();
             if (res.ok) {
                 let tasksArr = Array.isArray(data) ? data : (Array.isArray(data.tasks) ? data.tasks : []);
-                dispatch({ type: actions.ADD_ITEM, payload: null }); // Clear before set
-                // Set all tasks in global state (replace all)
+                dispatch({ type: actions.ADD_ITEM, payload: null });
                 dispatch({ type: 'SET_ALL', payload: tasksArr });
             } else {
                 setError(data.message || 'Error al obtener tareas');
             }
-        } catch {
-            setError('Error de red');
+        } catch (err) {
+            if (err.name !== 'AbortError') setError('Error de red');
         }
         setLoading(false);
-    };
+    }, [token, dispatch]);
+
 
     useEffect(() => {
-        fetchTasks();
-        // eslint-disable-next-line
-    }, [refresh, token]);
+        const controller = new AbortController();
+        fetchTasks(controller.signal);
+        return () => controller.abort();
+    }, [fetchTasks, refresh]);
 
     // Filter tasks from global state
     const filteredTasks = useMemo(() =>
